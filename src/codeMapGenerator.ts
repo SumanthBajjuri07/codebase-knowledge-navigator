@@ -1,34 +1,43 @@
-import * as fs from 'fs';
+import * as fs from 'fs/promises'; // Use the async version of 'fs'
 import * as path from 'path';
-import { parseFile } from './fileParser';
+import { Worker } from 'worker_threads';
+import * as vscode from 'vscode';
 
 export class CodeMapGenerator {
     private rootPath: string;
+    private progress: vscode.Progress<{ message?: string, increment?: number }>;
 
-    constructor(rootPath: string) {
+    constructor(rootPath: string, progress: vscode.Progress<{ message?: string, increment?: number }>) {
         this.rootPath = rootPath;
+        this.progress = progress;
     }
 
-    generateCodeMap(): any {
+    async generateCodeMap(): Promise<any> {
+        this.progress.report({ message: 'Initializing Code Map generation...' });
+        
         const codeMap: any = {
             name: path.basename(this.rootPath),
             type: 'directory',
-            children: this.processDirectory(this.rootPath)
+            children: await this.processDirectory(this.rootPath)
         };
+
+        this.progress.report({ message: 'Code Map generation complete!', increment: 100 });
         return codeMap;
     }
 
-    private processDirectory(dirPath: string): any[] {
-        const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+    private async processDirectory(dirPath: string): Promise<any[]> {
+        const entries = await fs.readdir(dirPath, { withFileTypes: true });
         const result: any[] = [];
 
         for (const entry of entries) {
-            const fullPath = path.join(dirPath, entry.name);
-            if (entry.name === 'node_modules') {
-                continue; // Skip node_modules directory
+            // Explicitly skip the 'node_modules' directory
+            if (entry.isDirectory() && entry.name === 'node_modules') {
+                continue; // Skip node_modules directory entirely
             }
+
+            const fullPath = path.join(dirPath, entry.name);
             if (entry.isDirectory()) {
-                const children = this.processDirectory(fullPath);
+                const children = await this.processDirectory(fullPath);
                 if (children.length > 0) {
                     result.push({
                         name: entry.name,
@@ -37,7 +46,7 @@ export class CodeMapGenerator {
                     });
                 }
             } else if (this.isRelevantFile(entry.name)) {
-                const fileInfo = parseFile(fullPath);
+                const fileInfo = await this.parseFileUsingWorker(fullPath);
                 result.push({
                     name: entry.name,
                     type: 'file',
@@ -52,5 +61,21 @@ export class CodeMapGenerator {
     private isRelevantFile(fileName: string): boolean {
         const relevantExtensions = ['.ts', '.js', '.tsx', '.jsx'];
         return relevantExtensions.includes(path.extname(fileName));
+    }
+
+    private async parseFileUsingWorker(filePath: string): Promise<any> {
+        return new Promise((resolve, reject) => {
+            const worker = new Worker(path.resolve(__dirname, 'fileParseWorker.js'), {
+                workerData: { filePath }
+            });
+
+            worker.on('message', (fileInfo) => resolve(fileInfo));
+            worker.on('error', (error) => reject(error));
+            worker.on('exit', (code) => {
+                if (code !== 0) {
+                    reject(new Error(`Worker stopped with exit code ${code}`));
+                }
+            });
+        });
     }
 }

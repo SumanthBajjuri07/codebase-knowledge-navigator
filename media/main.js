@@ -16,7 +16,7 @@
     function renderCodeMap() {
         d3.select('#codeMap').selectAll('*').remove();
 
-        const margin = {top: 20, right: 90, bottom: 30, left: 90};
+        const margin = {top: 20, right: 120, bottom: 20, left: 120};
         const width = window.innerWidth - margin.left - margin.right;
         const height = window.innerHeight - margin.top - margin.bottom;
 
@@ -27,59 +27,66 @@
             .append('g')
             .attr('transform', `translate(${margin.left},${margin.top})`);
 
-        const tooltip = d3.select('body').append('div')
-            .attr('class', 'tooltip')
-            .style('opacity', 0);
-
         const treeLayout = d3.tree().size([height, width]);
 
         const root = d3.hierarchy(codeMap);
-        const treeData = treeLayout(root);
+        
+        // Compute the new tree layout.
+        treeLayout(root);
 
-        const link = svg.selectAll('.link')
-            .data(treeData.links())
+        // Normalize for fixed-depth.
+        root.descendants().forEach((d, i) => {
+            d.y = d.depth * 180;
+        });
+
+        // Declare a color scale
+        const color = d3.scaleOrdinal(d3.schemeCategory10);
+
+        // Links
+        svg.selectAll('.link')
+            .data(root.links())
             .enter().append('path')
             .attr('class', 'link')
             .attr('d', d3.linkHorizontal()
                 .x(d => d.y)
                 .y(d => d.x));
 
+        // Nodes
         const node = svg.selectAll('.node')
-            .data(treeData.descendants())
+            .data(root.descendants())
             .enter().append('g')
             .attr('class', d => 'node' + (d.children ? ' node--internal' : ' node--leaf'))
             .attr('transform', d => `translate(${d.y},${d.x})`);
 
         node.append('circle')
             .attr('r', 5)
-            .on('mouseover', function(event, d) {
-                tooltip.transition()
-                    .duration(200)
-                    .style('opacity', .9);
-                tooltip.html(getTooltipContent(d.data))
-                    .style('left', (event.pageX + 10) + 'px')
-                    .style('top', (event.pageY - 28) + 'px');
-            })
-            .on('mouseout', function(d) {
-                tooltip.transition()
-                    .duration(500)
-                    .style('opacity', 0);
-            });
+            .style('fill', d => color(d.depth));
 
         node.append('text')
             .attr('dy', '.35em')
             .attr('x', d => d.children ? -13 : 13)
             .style('text-anchor', d => d.children ? 'end' : 'start')
-            .text(d => d.data.name);
+            .text(d => d.data.name)
+            .style('fill', d => color(d.depth));
 
-        // Zoom functionality
-        const zoom = d3.zoom()
-            .scaleExtent([0.1, 3])
-            .on('zoom', (event) => {
-                svg.attr('transform', event.transform);
-            });
+        // Tooltip
+        const tooltip = d3.select('body').append('div')
+            .attr('class', 'tooltip')
+            .style('opacity', 0);
 
-        d3.select('svg').call(zoom);
+        node.on('mouseover', function(event, d) {
+            tooltip.transition()
+                .duration(200)
+                .style('opacity', .9);
+            tooltip.html(getTooltipContent(d.data))
+                .style('left', (event.pageX + 10) + 'px')
+                .style('top', (event.pageY - 28) + 'px');
+        })
+        .on('mouseout', function(d) {
+            tooltip.transition()
+                .duration(500)
+                .style('opacity', 0);
+        });
     }
 
     function getTooltipContent(data) {
