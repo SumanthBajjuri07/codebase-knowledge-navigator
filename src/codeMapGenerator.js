@@ -24,7 +24,7 @@ var __importStar = (this && this.__importStar) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.CodeMapGenerator = void 0;
-const fs = __importStar(require("fs/promises")); // Use the async version of 'fs'
+const fs = __importStar(require("fs/promises"));
 const path = __importStar(require("path"));
 const worker_threads_1 = require("worker_threads");
 class CodeMapGenerator {
@@ -48,11 +48,10 @@ class CodeMapGenerator {
         const entries = await fs.readdir(dirPath, { withFileTypes: true });
         const result = [];
         for (const entry of entries) {
-            // Explicitly skip the 'node_modules' directory
-            if (entry.isDirectory() && entry.name === 'node_modules') {
-                continue; // Skip node_modules directory entirely
-            }
             const fullPath = path.join(dirPath, entry.name);
+            if (this.shouldExclude(fullPath)) {
+                continue;
+            }
             if (entry.isDirectory()) {
                 const children = await this.processDirectory(fullPath);
                 if (children.length > 0) {
@@ -74,8 +73,25 @@ class CodeMapGenerator {
         }
         return result;
     }
+    shouldExclude(filePath) {
+        const excludePatterns = [
+            /node_modules/,
+            /\.git/,
+            /test/,
+            /tests/,
+            /__tests__/,
+            /\.test\./,
+            /\.spec\./,
+            /\.vscode/,
+            /\.idea/,
+            /dist/,
+            /build/,
+            /\.DS_Store/
+        ];
+        return excludePatterns.some(pattern => pattern.test(filePath));
+    }
     isRelevantFile(fileName) {
-        const relevantExtensions = ['.ts', '.js', '.tsx', '.jsx'];
+        const relevantExtensions = ['.tsx', '.jsx'];
         return relevantExtensions.includes(path.extname(fileName));
     }
     async parseFileUsingWorker(filePath) {

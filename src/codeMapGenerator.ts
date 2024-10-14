@@ -1,4 +1,4 @@
-import * as fs from 'fs/promises'; // Use the async version of 'fs'
+import * as fs from 'fs/promises';
 import * as path from 'path';
 import { Worker } from 'worker_threads';
 import * as vscode from 'vscode';
@@ -30,12 +30,12 @@ export class CodeMapGenerator {
         const result: any[] = [];
 
         for (const entry of entries) {
-            // Explicitly skip the 'node_modules' directory
-            if (entry.isDirectory() && entry.name === 'node_modules') {
-                continue; // Skip node_modules directory entirely
+            const fullPath = path.join(dirPath, entry.name);
+            
+            if (this.shouldExclude(fullPath)) {
+                continue;
             }
 
-            const fullPath = path.join(dirPath, entry.name);
             if (entry.isDirectory()) {
                 const children = await this.processDirectory(fullPath);
                 if (children.length > 0) {
@@ -58,8 +58,27 @@ export class CodeMapGenerator {
         return result;
     }
 
+    private shouldExclude(filePath: string): boolean {
+        const excludePatterns = [
+            /node_modules/,
+            /\.git/,
+            /test/,
+            /tests/,
+            /__tests__/,
+            /\.test\./,
+            /\.spec\./,
+            /\.vscode/,
+            /\.idea/,
+            /dist/,
+            /build/,
+            /\.DS_Store/
+        ];
+
+        return excludePatterns.some(pattern => pattern.test(filePath));
+    }
+
     private isRelevantFile(fileName: string): boolean {
-        const relevantExtensions = ['.ts', '.js', '.tsx', '.jsx'];
+        const relevantExtensions = ['.tsx', '.jsx'];
         return relevantExtensions.includes(path.extname(fileName));
     }
 
