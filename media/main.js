@@ -3,6 +3,7 @@
 
     let codeMap;
     let svg, g, zoom;
+    let nodes, links;
 
     window.addEventListener('message', event => {
         const message = event.data;
@@ -17,7 +18,7 @@
     function renderCodeMap() {
         d3.select('#codeMap').selectAll('*').remove();
 
-        const margin = {top: 40, right: 120, bottom: 40, left: 120};
+        const margin = {top: 40, right: 20, bottom: 40, left: 20};
         const width = window.innerWidth - margin.left - margin.right;
         const height = window.innerHeight - margin.top - margin.bottom;
 
@@ -40,83 +41,98 @@
 
         const root = d3.hierarchy(codeMap);
 
+        // Count leaves to determine tree breadth
+        let maxDepth = 0;
+        root.eachBefore(d => {
+            if (d.depth > maxDepth) maxDepth = d.depth;
+        });
+
+        // Calculate dimensions based on the number of nodes
+        const nodeSize = 10;
+        const horizontalSpacing = 200;
+        const verticalSpacing = 150;
+
+        const treeWidth = width;
+        const treeHeight = (maxDepth + 1) * verticalSpacing;
+
         const treeLayout = d3.tree()
-            .size([height, width])
-            .nodeSize([60, 350]); // Increased node spacing
+            .size([treeWidth, treeHeight])
+            .nodeSize([horizontalSpacing, verticalSpacing]);
 
         treeLayout(root);
 
-        // Use force simulation to prevent node overlap
-        const simulation = d3.forceSimulation(root.descendants())
-            .force('x', d3.forceX(d => d.y).strength(0.1))
-            .force('y', d3.forceY(d => d.x).strength(0.1))
-            .force('collision', d3.forceCollide().radius(50))
-            .force('siblings', siblingForce())
-            .stop();
+        // Adjust node positions to prevent overlapping
+        root.eachBefore(d => {
+            d.y = d.depth * verticalSpacing;
+        });
 
-        // Run the simulation
-        for (let i = 0; i < 300; ++i) simulation.tick();
+        // Center the tree
+        const rootX = root.x;
+        root.eachBefore(d => {
+            d.x -= rootX - width / 2;
+        });
 
-        // Custom force to push siblings apart
-        function siblingForce() {
-            return function(alpha) {
-                root.each(function(d) {
-                    if (d.parent) {
-                        const siblings = d.parent.children;
-                        siblings.forEach(function(sibling) {
-                            if (sibling !== d) {
-                                const dy = d.x - sibling.x;
-                                const dx = d.y - sibling.y;
-                                const distance = Math.sqrt(dx * dx + dy * dy);
-                                if (distance < 100) {
-                                    d.x += dy * alpha * 0.1;
-                                    d.y += dx * alpha * 0.1;
-                                    sibling.x -= dy * alpha * 0.1;
-                                    sibling.y -= dx * alpha * 0.1;
-                                }
-                            }
-                        });
-                    }
-                });
-            };
-        }
-
-        // Declare a color scale
-        const color = d3.scaleOrdinal(d3.schemeCategory10);
+        // Color scale
+        const colorScale = d3.scaleOrdinal()
+            .domain([0, 1, 2, 3, 4, 5])
+            .range(['#6366f1', '#8b5cf6', '#ec4899', '#f43f5e', '#f97316', '#eab308']);
 
         // Links
-        const link = g.selectAll('.link')
+        links = g.selectAll('.link')
             .data(root.links())
             .enter().append('path')
             .attr('class', 'link')
-            .attr('d', d3.linkHorizontal()
-                .x(d => d.y)
-                .y(d => d.x));
+            .attr('d', d => `M${d.source.x},${d.source.y + 20}L${d.source.x},${(d.source.y + d.target.y) / 2}H${d.target.x}V${d.target.y}`)
+            .style('stroke', d => colorScale(d.source.depth))
+            .style('stroke-width', 2)
+            .style('fill', 'none');
 
         // Nodes
-        const node = g.selectAll('.node')
+        nodes = g.selectAll('.node')
             .data(root.descendants())
             .enter().append('g')
             .attr('class', d => 'node' + (d.children ? ' node--internal' : ' node--leaf'))
-            .attr('transform', d => `translate(${d.y},${d.x})`);
+            .attr('transform', d => `translate(${d.x},${d.y})`);
 
-        node.append('circle')
-            .attr('r', 5)
-            .style('fill', d => color(d.depth));
+        nodes.append('rect')
+            .attr('width', nodeSize)
+            .attr('height', nodeSize)
+            .attr('x', -nodeSize / 2)
+            .attr('y', -nodeSize / 2)
+            .style('fill', d => colorScale(d.depth))
+            .style('stroke', '#ffffff')
+            .style('stroke-width', 1);
 
-        node.append('text')
-            .attr('dy', '.35em')
-            .attr('x', d => d.children ? -13 : 13)
-            .style('text-anchor', d => d.children ? 'end' : 'start')
+        nodes.append('text')
+            .attr('dy', '1.5em')
+            .attr('text-anchor', 'middle')
             .text(d => d.data.name)
-            .style('fill', d => color(d.depth));
+            .style('fill', d => colorScale(d.depth))
+            .style('font-size', '12px')
+            .each(function(d) {
+                const self = d3.select(this);
+                const textLength = self.node().getComputedTextLength();
+                if (textLength > horizontalSpacing - 10) {
+                    const text = self.text();
+                    const ellipsisWidth = self.text('...').node().getComputedTextLength();
+                    const availableWidth = horizontalSpacing - 10 - ellipsisWidth;
+                    let truncatedText = '';
+                    for (let i = 0; i < text.length; i++) {
+                        if (self.text(text.slice(0, i)).node().getComputedTextLength() > availableWidth) {
+                            truncatedText = text.slice(0, i - 1);
+                            break;
+                        }
+                    }
+                    self.text(truncatedText + '...');
+                }
+            });
 
         // Tooltip
         const tooltip = d3.select('body').append('div')
             .attr('class', 'tooltip')
             .style('opacity', 0);
 
-        node.on('mouseover', function(event, d) {
+        nodes.on('mouseover', function(event, d) {
             tooltip.transition()
                 .duration(200)
                 .style('opacity', .9);

@@ -1,7 +1,9 @@
 {
   "name": "codebase-knowledge-navigator",
   "displayName": "codebase-knowledge-navigator",
+  "publisher": "SumanthBajjuri",
   "description": "Visualize and navigate complex codebases with interactive maps",
+  "icon": "flow-diagram.png",
   "version": "0.0.1",
   "engines": {
     "vscode": "^1.94.0"
