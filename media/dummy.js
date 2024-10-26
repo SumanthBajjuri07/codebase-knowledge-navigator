@@ -7,6 +7,9 @@
     let searchQuery = '';
     let searchResults = [];
     let currentSearchIndex = -1;
+    let currentTheme = 'light';
+
+    
 
     // Color scale for depth-based coloring
     const colorScale = d3.scaleOrdinal()
@@ -222,24 +225,36 @@
                 }
             });
 
-        // Tooltip
+        // Enhanced tooltip
         const tooltip = d3.select('body').append('div')
             .attr('class', 'tooltip')
-            .style('opacity', 0);
+            .style('opacity', 0)
+            .style('background-color', 'rgba(255, 255, 255, 0.95)')
+            .style('border', '1px solid #ddd')
+            .style('border-radius', '6px')
+            .style('padding', '12px')
+            .style('box-shadow', '0 2px 4px rgba(0,0,0,0.1)')
+            .style('max-width', '300px')
+            .style('font-size', '12px')
+            .style('line-height', '1.4');
 
         nodes.on('mouseover', function(event, d) {
-            tooltip.transition()
-                .duration(200)
-                .style('opacity', .9);
-            tooltip.html(getTooltipContent(d.data))
-                .style('left', (event.pageX + 10) + 'px')
-                .style('top', (event.pageY - 28) + 'px');
-        })
-        .on('mouseout', function(d) {
-            tooltip.transition()
-                .duration(500)
-                .style('opacity', 0);
-        });
+                tooltip.transition()
+                    .duration(200)
+                    .style('opacity', 1);
+                tooltip.html(getTooltipContent(d.data))
+                    .style('left', (event.pageX + 10) + 'px')
+                    .style('top', (event.pageY - 28) + 'px');
+            })
+            .on('mousemove', function(event) {
+                tooltip.style('left', (event.pageX + 10) + 'px')
+                    .style('top', (event.pageY - 28) + 'px');
+            })
+            .on('mouseout', function() {
+                tooltip.transition()
+                    .duration(500)
+                    .style('opacity', 0);
+            });
 
         // Zoom controls
         d3.select('#zoomIn').on('click', () => {
@@ -278,21 +293,54 @@
     }
 
     function getTooltipContent(data) {
-        let content = `<strong>${data.name}</strong><br>Type: ${data.type}`;
+        let content = `<div style="color: #333;">`;
+        
+        // File name with larger, bold text
+        content += `<div style="font-size: 14px; font-weight: bold; margin-bottom: 8px; color: #2563eb;">
+            ${data.name}
+        </div>`;
+        
+        // Type indicator with background color
+        content += `<div style="display: inline-block; background: ${data.type === 'file' ? '#dbeafe' : '#fef3c7'}; 
+            padding: 2px 6px; border-radius: 4px; margin-bottom: 8px; font-size: 11px;">
+            ${data.type}
+        </div>`;
+
         if (data.type === 'file') {
-            if (data.imports && data.imports.length) {
-                content += `<br>Imports: ${data.imports.join(', ')}`;
-            }
-            if (data.exports && data.exports.length) {
-                content += `<br>Exports: ${data.exports.join(', ')}`;
-            }
+            // Functions section
             if (data.functions && data.functions.length) {
-                content += `<br>Functions: ${data.functions.join(', ')}`;
+                content += `<div style="margin-top: 8px;">
+                    <div style="font-weight: bold; color: #4b5563;">Functions:</div>
+                    <div style="margin-left: 8px; color: #6b7280;">${data.functions.join(', ')}</div>
+                </div>`;
             }
+
+            // Classes section
             if (data.classes && data.classes.length) {
-                content += `<br>Classes: ${data.classes.join(', ')}`;
+                content += `<div style="margin-top: 8px;">
+                    <div style="font-weight: bold; color: #4b5563;">Classes:</div>
+                    <div style="margin-left: 8px; color: #6b7280;">${data.classes.join(', ')}</div>
+                </div>`;
+            }
+
+            // Imports section
+            if (data.imports && data.imports.length) {
+                content += `<div style="margin-top: 8px;">
+                    <div style="font-weight: bold; color: #4b5563;">Imports:</div>
+                    <div style="margin-left: 8px; color: #6b7280;">${data.imports.join(', ')}</div>
+                </div>`;
+            }
+
+            // Exports section
+            if (data.exports && data.exports.length) {
+                content += `<div style="margin-top: 8px;">
+                    <div style="font-weight: bold; color: #4b5563;">Exports:</div>
+                    <div style="margin-left: 8px; color: #6b7280;">${data.exports.join(', ')}</div>
+                </div>`;
             }
         }
+
+        content += `</div>`;
         return content;
     }
 

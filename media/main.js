@@ -7,11 +7,40 @@
     let searchQuery = '';
     let searchResults = [];
     let currentSearchIndex = -1;
+    let currentTheme = 'light';
 
     // Color scale for depth-based coloring
     const colorScale = d3.scaleOrdinal()
         .domain([0, 1, 2, 3, 4, 5])
         .range(['#6366f1', '#8b5cf6', '#ec4899', '#f43f5e', '#f97316', '#eab308']);
+
+
+    // Theme-specific colors
+    const themeColors = {
+        light: {
+            background: '#ffffff',
+            text: '#706c6c',
+            border: '#cccccc',
+            tooltipBg: 'rgba(255, 255, 255, 0.95)',
+            tooltipText: '#333333',
+            tooltipBorder: '#ddd',
+            searchUnmatched: '#cccccc',
+            searchMatch: '#ffff00',
+            searchMatchShadow: 'black'
+        },
+        dark: {
+            background: '#1e1e1e',
+            text: '#ffffff',
+            border: '#555555',
+            tooltipBg: 'rgba(30, 30, 30, 0.95)',
+            tooltipText: '#ffffff',
+            tooltipBorder: '#555555',
+            searchUnmatched: '#4a4a4a',
+            searchMatch: '#ffd700',
+            searchMatchShadow: 'black'
+        }
+    };
+
 
     window.addEventListener('message', event => {
         const message = event.data;
@@ -21,7 +50,8 @@
                 renderCodeMap();
                 break;
             case 'themeChanged':
-                updateSearchBoxTheme(message.theme);
+                currentTheme = message.theme;
+                updateTheme(message.theme);
                 break;
         }
     });
@@ -43,19 +73,53 @@
             .attr('type', 'text')
             .attr('id', 'searchBox')
             .attr('placeholder', 'Search files...')
-            .style('padding', '5px 10px')
-            .style('border-radius', '4px')
-            .style('border', '1px solid #ccc')
-            .style('outline', 'none');
+            .style('padding', '8px 12px')
+            .style('border-radius', '6px')
+            .style('border', '1px solid')
+            .style('outline', 'none')
+            .style('font-size', '14px')
+            .style('width', '200px')
+            .style('transition', 'all 0.3s ease');
 
         const matchCount = searchContainer
             .append('span')
             .attr('id', 'matchCount')
             .style('margin-left', '10px')
-            .style('font-size', '12px');
+            .style('font-size', '13px')
+            .style('font-weight', '500');
 
+        updateTheme(currentTheme);
         return searchBox;
     }
+
+
+    function updateTheme(theme) {
+        currentTheme = theme;
+        const colors = themeColors[theme];
+        
+        // Update search box
+        const searchBox = d3.select('#searchBox');
+        searchBox
+            .style('background-color', colors.background)
+            .style('color', colors.text)
+            .style('border-color', colors.border);
+
+        // Update match count
+        const matchCount = d3.select('#matchCount')
+            .style('color', colors.text);
+
+        // Update tooltip style
+        d3.select('.tooltip')
+            .style('background-color', colors.tooltipBg)
+            .style('color', colors.tooltipText)
+            .style('border-color', colors.tooltipBorder);
+
+        // Update search highlighting if search is active
+        if (searchQuery) {
+            updateSearch();
+        }
+    }
+
 
     function updateSearchBoxTheme(theme) {
         const searchBox = d3.select('#searchBox');
@@ -80,38 +144,46 @@
             searchQuery = this.value.toLowerCase();
             updateSearch();
         });
+    }
 
-        function updateSearch() {
-            // Reset all nodes to their original appearance
+    function updateSearch() {
+        const colors = themeColors[currentTheme];
+        
+        // Reset all nodes to their original appearance
+        nodes.selectAll('text')
+            .style('fill', d => colorScale(d.depth))
+            .style('font-weight', 'normal')
+            .style('stroke', 'none')
+            .style('stroke-width', 0)
+            .style('text-shadow', 'none');
+
+        if (searchQuery) {
+            // Find matching nodes
+            searchResults = nodes.filter(d => 
+                d.data.name.toLowerCase().includes(searchQuery)
+            );
+
+            // Set non-matching nodes to theme-specific color
             nodes.selectAll('text')
-                .style('fill', d => colorScale(d.depth))
-                .style('font-weight', 'normal')
-                .style('stroke', 'none')
-                .style('stroke-width', 0)
-                .style('text-shadow', 'none');
+                .style('fill', colors.searchUnmatched);
 
-            if (searchQuery) {
-                // Find matching nodes
-                searchResults = nodes.filter(d => 
-                    d.data.name.toLowerCase().includes(searchQuery)
-                );
+            // Highlight matching text
+            searchResults.selectAll('text')
+                .style('fill', colors.searchMatch)
+                .style('font-weight', 'bold')
+                .style('text-shadow', `0 0 3px ${colors.searchMatchShadow}`);
 
-                // Set non-matching nodes to white
-                nodes.selectAll('text')
-                    .style('fill', '#ffffff');
-
-                // Highlight matching text in yellow
-                searchResults.selectAll('text')
-                    .style('fill', '#ffff00')
-                    .style('font-weight', 'bold')
-                    .style('text-shadow', '0 0 3px black');
-
-                // Update match count
-                matchCount.text(`${searchResults.size()} matches found`);
-            } else {
-                searchResults = [];
-                matchCount.text('');
-            }
+            // Update match count
+            const matchCount = d3.select('#matchCount')
+                .text(`${searchResults.size()} matches found`)
+                .style('color', colors.text);
+        } else {
+            searchResults = [];
+            d3.select('#matchCount').text('');
+            
+            // Reset to original colors
+            nodes.selectAll('text')
+                .style('fill', d => colorScale(d.depth));
         }
     }
 
@@ -222,24 +294,36 @@
                 }
             });
 
-        // Tooltip
         const tooltip = d3.select('body').append('div')
             .attr('class', 'tooltip')
-            .style('opacity', 0);
+            .style('opacity', 0)
+            .style('border-radius', '8px')
+            .style('padding', '16px')
+            .style('box-shadow', '0 4px 6px rgba(0,0,0,0.1), 0 2px 4px rgba(0,0,0,0.06)')
+            .style('max-width', '350px')
+            .style('font-size', '13px')
+            .style('line-height', '1.5')
+            .style('transition', 'opacity 0.2s ease');
+
+        updateTheme(currentTheme);
 
         nodes.on('mouseover', function(event, d) {
-            tooltip.transition()
-                .duration(200)
-                .style('opacity', .9);
-            tooltip.html(getTooltipContent(d.data))
-                .style('left', (event.pageX + 10) + 'px')
-                .style('top', (event.pageY - 28) + 'px');
-        })
-        .on('mouseout', function(d) {
-            tooltip.transition()
-                .duration(500)
-                .style('opacity', 0);
-        });
+                tooltip.transition()
+                    .duration(200)
+                    .style('opacity', 1);
+                tooltip.html(getTooltipContent(d.data))
+                    .style('left', (event.pageX + 10) + 'px')
+                    .style('top', (event.pageY - 28) + 'px');
+            })
+            .on('mousemove', function(event) {
+                tooltip.style('left', (event.pageX + 10) + 'px')
+                    .style('top', (event.pageY - 28) + 'px');
+            })
+            .on('mouseout', function() {
+                tooltip.transition()
+                    .duration(500)
+                    .style('opacity', 0);
+            });
 
         // Zoom controls
         d3.select('#zoomIn').on('click', () => {
@@ -278,21 +362,48 @@
     }
 
     function getTooltipContent(data) {
-        let content = `<strong>${data.name}</strong><br>Type: ${data.type}`;
+        const colors = themeColors[currentTheme];
+        let content = `<div style="color: ${colors.tooltipText};">`;
+        
+        // File name with larger, bold text
+        content += `<div style="font-size: 16px; font-weight: bold; margin-bottom: 10px; color: ${currentTheme === 'dark' ? '#60a5fa' : '#2563eb'};">
+            ${data.name}
+        </div>`
+
+        // Type indicator with theme-aware background
+        const typeBgColor = currentTheme === 'dark' ? 
+            (data.type === 'file' ? 'rgba(37, 99, 235, 0.2)' : 'rgba(234, 179, 8, 0.2)') :
+            (data.type === 'file' ? '#dbeafe' : '#fef3c7');
+        
+        content += `<div style="display: inline-block; background: ${typeBgColor}; 
+            padding: 4px 8px; border-radius: 4px; margin-bottom: 10px; font-size: 12px;">
+            ${data.type}
+        </div>`;
+
         if (data.type === 'file') {
-            if (data.imports && data.imports.length) {
-                content += `<br>Imports: ${data.imports.join(', ')}`;
-            }
-            if (data.exports && data.exports.length) {
-                content += `<br>Exports: ${data.exports.join(', ')}`;
-            }
-            if (data.functions && data.functions.length) {
-                content += `<br>Functions: ${data.functions.join(', ')}`;
-            }
-            if (data.classes && data.classes.length) {
-                content += `<br>Classes: ${data.classes.join(', ')}`;
-            }
+            const sections = [
+                { title: 'Functions', data: data.functions },
+                { title: 'Classes', data: data.classes },
+                { title: 'Imports', data: data.imports },
+                { title: 'Exports', data: data.exports }
+            ];
+
+            sections.forEach(section => {
+                if (section.data && section.data.length) {
+                    content += `
+                        <div style="margin-top: 10px;">
+                            <div style="font-weight: 600; color: ${currentTheme === 'dark' ? '#e5e7eb' : '#4b5563'}; margin-bottom: 4px;">
+                                ${section.title}:
+                            </div>
+                            <div style="margin-left: 8px; color: ${currentTheme === 'dark' ? '#9ca3af' : '#6b7280'}; line-height: 1.5;">
+                                ${section.data.join(', ')}
+                            </div>
+                        </div>`;
+                }
+            });
         }
+
+        content += `</div>`;
         return content;
     }
 
