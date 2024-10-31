@@ -4,7 +4,7 @@
   "publisher": "SumanthBajjuri",
   "description": "Visualize and navigate complex codebases with interactive maps",
   "icon": "flow-diagram.png",
-  "version": "0.0.1",
+  "version": "2.0.0",
   "engines": {
     "vscode": "^1.94.0"
   },
