@@ -6,6 +6,7 @@ Welcome to the **Codebase Knowledge Navigator!** This VS Code extension enhances
 
 - **Interactive Code Maps**: Automatically generates visual maps of your codebase, showing relationships between files.
 - **Hover Information**: Get instant metadata about files, including imports and file names, by hovering over components in the map.
+- **Search Feature**: Quickly locate specific  files within the code map using an integrated search function.
 - **Streamlined Onboarding**: Perfect for onboarding new developers, allowing them to quickly grasp the structure of large projects.
 - **Improved Collaboration**: Helps teams understand code interdependencies, making collaboration smoother.
 
